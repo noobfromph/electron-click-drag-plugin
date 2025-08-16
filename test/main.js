@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 
-// Load the compiled native addon
-const dragAddon = require('../build/Release/drag.node');
+// Load the addon via package entry (handles platform paths)
+const dragAddon = require('..');
 
 app.whenReady().then(() => {
   const win = new BrowserWindow({
@@ -21,10 +21,8 @@ app.whenReady().then(() => {
 
   ipcMain.on('start-drag', (event) => {
     const hwndBuffer = win.getNativeWindowHandle();
-    // On Linux, extract the window ID from the buffer (first 4 bytes, little-endian)
-    const windowId = process.platform === 'linux'
-      ? hwndBuffer.readUInt32LE(0)
-      : hwndBuffer;
+    // Linux: extract window id; macOS/Windows: pass the buffer
+    const windowId = process.platform === 'linux' ? hwndBuffer.readUInt32LE(0) : hwndBuffer;
     dragAddon.startDrag(windowId);
   });
 });

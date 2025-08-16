@@ -1,0 +1,121 @@
+name: Build native addon (cross-platform)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [ published ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-13 -> Intel x64, macos-14 -> Apple Silicon arm64
+        os: [ ubuntu-latest, windows-latest, macos-13, macos-14 ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install build deps (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 make g++ libx11-dev
+
+      - name: Install dependencies (skip Electron download)
+        run: npm ci --ignore-scripts
+
+      - name: Build with node-gyp
+        run: npx node-gyp configure build
+
+      - name: Compute platform/arch
+        id: meta
+        shell: bash
+        run: |
+          PLATFORM=$(node -p "require('os').platform()")
+          ARCH=$(node -p "require('os').arch()")
+          echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
+          echo "Building for $PLATFORM-$ARCH"
+
+      - name: Package prebuilt binary
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const os = require('os');
+          const platform = os.platform();
+          const arch = os.arch();
+          const src = path.join('build','Release','drag.node');
+          if (!fs.existsSync(src)) {
+            console.error('Build output not found:', src);
+            process.exit(1);
+          }
+          const dstDir = path.join('build','Release', `${platform}-${arch}`);
+          fs.mkdirSync(dstDir, { recursive: true });
+          const dst = path.join(dstDir, 'drag.node');
+          fs.copyFileSync(src, dst);
+          console.log('Packaged binary to', dst);
+          NODE
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: drag-${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}
+          path: build/Release/${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}/drag.node
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm (on release)
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: drag-*
+          merge-multiple: true
+          path: build/Release
+
+      - name: List downloaded files
+        run: |
+          echo "Downloaded prebuilt binaries:"
+          find build -type f -maxdepth 3 -print || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure npm auth
+        if: ${{ env.NPM_TOKEN != '' }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+
+      - name: Publish to npm
+        if: ${{ env.NPM_TOKEN != '' }}
+        run: npm publish --access public
+

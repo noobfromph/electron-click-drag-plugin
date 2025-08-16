@@ -1,7 +1,7 @@
 {
   "name": "electron-click-drag-plugin",
-  "version": "2.0.1",
-  "description": "A native Electron plugin for click-and-drag functionality (Windows + Linux)",
+  "version": "2.0.2",
+  "description": "A native Electron plugin for click-and-drag functionality (Windows + Linux + macOS)",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "noobfromph",
@@ -16,12 +16,15 @@
     "drag",
     "windows",
     "linux",
+    "macos",
     "addon",
     "click-drag"
   ],
   "files": [
     "build/Release/win32-x64/drag.node",
     "build/Release/linux-x64/drag.node",
+    "build/Release/darwin-x64/drag.node",
+    "build/Release/darwin-arm64/drag.node",
     "index.js",
     "index.d.ts",
     "README.md",

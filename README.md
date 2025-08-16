@@ -43,10 +43,11 @@ app.whenReady().then(() => {
   ipcMain.on('start-drag', () => {
     try {
       const hwndBuffer = win.getNativeWindowHandle();
-      // On Linux, extract the window ID from the buffer (first 4 bytes, little-endian)
+      // Linux: extract X11 Window ID from the buffer (first 4 bytes, little-endian)
+      // macOS/Windows: pass Buffer directly
       const windowId = process.platform === 'linux'
-      ? hwndBuffer.readUInt32LE(0)
-      : hwndBuffer;
+        ? hwndBuffer.readUInt32LE(0)
+        : hwndBuffer;
 
       dragAddon.startDrag(windowId);
     } catch (error) {
@@ -56,7 +57,7 @@ app.whenReady().then(() => {
 });
 ```
 ### ✅ Tested On
-Windows 10 / 11, Linux (Fedora)
+Windows 10 / 11, Linux (Fedora), macOS (15.6 M1)
 
 Standard Electron (>= v22)
 
